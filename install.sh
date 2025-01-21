@@ -101,6 +101,14 @@ sudo ufw allow 4444/tcp
 sudo ufw allow OpenSSH
 sudo ufw enable
 
+# Install and configure Fail2Ban
+sudo apt install fail2ban -y
+sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+
+# Enable and start Fail2Ban service
+sudo systemctl enable fail2ban
+sudo systemctl start fail2ban
+
 # Remove the temporary /ubuntu directory
 sudo rm -rf ~/ubuntu
 
