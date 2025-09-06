@@ -229,6 +229,12 @@ set mouse=a
 " Load vim-vscode-style theme
 packadd vim-vscode-style
 colorscheme vscode-style
+
+" In Vim use termcap sequences to change cursor shape
+if !has('nvim')
+  let &t_SI = "\<Esc>[6 q"   " INSERT — vertical bar
+  let &t_EI = "\<Esc>[2 q"   " NORMAL — block
+endif
 EOF
 
 ###############################################################################
