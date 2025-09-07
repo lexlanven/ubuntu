@@ -92,8 +92,8 @@ TMUX_STATUS_LEFT="set -g status-left '#(/usr/local/bin/connections.csx)'"
 TMUX_STATUS_RIGHT="set -g status-right '#(/usr/local/bin/statusbar.csx)'"
 TMUX_NO_WINDOW_NAME="set -g window-status-format ''"
 TMUX_NO_WINDOW_NAME_CUR="set -g window-status-current-format ''"
-TMUX_BIND_KEYS="bind '\"' split-window -v
-bind % split-window -h"
+TMUX_BIND_KEYS="bind - split-window -v
+bind | split-window -h"
 
 if [ ! -f "$TMUX_CONF_PATH" ]; then
   {
