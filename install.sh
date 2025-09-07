@@ -92,12 +92,8 @@ TMUX_STATUS_LEFT="set -g status-left '#(/usr/local/bin/connections.csx)'"
 TMUX_STATUS_RIGHT="set -g status-right '#(/usr/local/bin/statusbar.csx)'"
 TMUX_NO_WINDOW_NAME="set -g window-status-format ''"
 TMUX_NO_WINDOW_NAME_CUR="set -g window-status-current-format ''"
-
-TMUX_BIND_KEYS=$(cat <<'EOT'
-bind '"' split-window -v
-bind % split-window -h
-EOT
-)
+TMUX_BIND_KEYS="bind '\"' split-window -v
+bind % split-window -h"
 
 if [ ! -f "$TMUX_CONF_PATH" ]; then
   {
@@ -108,6 +104,7 @@ if [ ! -f "$TMUX_CONF_PATH" ]; then
     echo "$TMUX_STATUS_RIGHT"
     echo "$TMUX_NO_WINDOW_NAME"
     echo "$TMUX_NO_WINDOW_NAME_CUR"
+    echo "$TMUX_BIND_KEYS"
   } > "$TMUX_CONF_PATH"
 else
   sed -i '/^set -g status-left/d' "$TMUX_CONF_PATH"
@@ -119,6 +116,7 @@ else
   grep -Fxq "$TMUX_STATUS_INTERVAL" "$TMUX_CONF_PATH" || echo "$TMUX_STATUS_INTERVAL" >> "$TMUX_CONF_PATH"
   grep -Fxq "$TMUX_NO_WINDOW_NAME" "$TMUX_CONF_PATH" || echo "$TMUX_NO_WINDOW_NAME" >> "$TMUX_CONF_PATH"
   grep -Fxq "$TMUX_NO_WINDOW_NAME_CUR" "$TMUX_CONF_PATH" || echo "$TMUX_NO_WINDOW_NAME_CUR" >> "$TMUX_CONF_PATH"
+  grep -Fxq "bind '\"' split-window -v" "$TMUX_CONF_PATH" || echo "$TMUX_BIND_KEYS" >> "$TMUX_CONF_PATH"
 fi
 
 if tmux info &>/dev/null; then
