@@ -230,6 +230,9 @@ set shiftwidth=4
 set expandtab
 set mouse=a
 
+" YAML
+autocmd FileType yaml setlocal tabstop=2 shiftwidth=2 expandtab
+
 " Load vim-vscode-style theme
 packadd vim-vscode-style
 colorscheme vscode-style
