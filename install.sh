@@ -349,8 +349,6 @@ network:
     ${DEFAULT_IF}:
       dhcp4: true
       dhcp6: false
-      accept-ra: false
-      link-local: [ ipv4 ]
       dhcp4-overrides:
         use-dns: false
       nameservers:
