@@ -19,7 +19,8 @@ sudo apt install -y \
     lsb-release \
     iproute2 \
     git \
-    nftables
+    nftables \
+    netplan.io
 
 ###############################################################################
 # Install and configure ZSH
@@ -135,7 +136,6 @@ sudo systemctl start fail2ban
 # Configure Firewall (nftables; disable UFW if active)
 ###############################################################################
 
-# Если UFW установлен и активен — отключаем
 if command -v ufw &>/dev/null; then
   if sudo ufw status | grep -q "Status: active"; then
     echo "⚠️  UFW активен — выключаю..."
@@ -143,11 +143,9 @@ if command -v ufw &>/dev/null; then
   fi
 fi
 
-# Включаем nftables в автозагрузку и запускаем
 sudo systemctl enable nftables
 sudo systemctl start nftables
 
-# Базовая политика: входящие — только SSH; исходящие — всё
 sudo tee /etc/nftables.conf > /dev/null << 'EOF'
 #!/usr/sbin/nft -f
 
@@ -157,16 +155,10 @@ table inet filter {
     chain input {
         type filter hook input priority 0;
 
-        # Разрешаем loopback
         iif lo accept
-
-        # Разрешаем уже установленные соединения
         ct state established,related accept
-
-        # Разрешаем SSH
         tcp dport 22 accept
 
-        # Остальное дропаем
         drop
     }
 
@@ -177,14 +169,11 @@ table inet filter {
 
     chain output {
         type filter hook output priority 0;
-
-        # Разрешаем всё исходящее (интернет доступен)
         accept
     }
 }
 EOF
 
-# Применяем правила
 sudo nft -f /etc/nftables.conf
 sudo systemctl restart nftables
 
@@ -301,6 +290,50 @@ if [ ! -d "$HOME/.vim/pack/themes/start/vim-vscode-style/.git" ]; then
   git clone https://github.com/lexlanven/vim-vscode-style.git "$HOME/.vim/pack/themes/start/vim-vscode-style"
 else
   git -C "$HOME/.vim/pack/themes/start/vim-vscode-style" pull --ff-only || true
+fi
+
+###############################################################################
+# Configure Netplan (detect WAN iface via route to 8.8.8.8)
+###############################################################################
+
+DEFAULT_IF="$(ip route get 8.8.8.8 2>/dev/null | awk '/ dev / {for (i=1;i<=NF;i++) if ($i=="dev") {print $(i+1); exit}}')"
+if [ -z "$DEFAULT_IF" ]; then
+  DEFAULT_IF="$(ip route show default 2>/dev/null | awk '/^default/ {print $5; exit}')"
+fi
+
+if [ -z "$DEFAULT_IF" ] || [ ! -d "/sys/class/net/$DEFAULT_IF" ]; then
+  echo "❌ Не удалось определить интерфейс с интернетом. Пропускаю настройку Netplan."
+else
+  MAC_ADDR="$(cat "/sys/class/net/$DEFAULT_IF/address" | tr 'A-Z' 'a-z')"
+
+  echo "🌐 Обнаружен интерфейс с интернетом: $DEFAULT_IF (MAC: $MAC_ADDR)"
+
+  TS="$(date +%Y%m%d%H%M%S)"
+  sudo mkdir -p "/etc/netplan/backup-$TS"
+  if ls /etc/netplan/*.yaml >/dev/null 2>&1; then
+    sudo mv /etc/netplan/*.yaml "/etc/netplan/backup-$TS"/
+  fi
+
+  sudo tee /etc/netplan/01-main.yaml > /dev/null <<EOF
+network:
+  version: 2
+  ethernets:
+    ${DEFAULT_IF}:
+      match:
+        macaddress: "${MAC_ADDR}"
+      set-name: "${DEFAULT_IF}"
+      dhcp4: true
+      dhcp6: false
+      accept-ra: false
+      link-local: [ ipv4 ]
+      dhcp4-overrides:
+        use-dns: false
+      nameservers:
+        addresses: [8.8.8.8, 1.1.1.1]
+EOF
+
+  sudo netplan generate
+  sudo netplan apply || true
 fi
 
 ###############################################################################
