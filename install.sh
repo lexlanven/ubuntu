@@ -157,15 +157,18 @@ table inet filter {
 
         iif lo accept
         ct state established,related accept
-        tcp dport 22 accept
+        tcp dport { 22, 80, 443 } accept 
 
         drop
     }
 
     chain forward {
         type filter hook forward priority 0;
-        tcp dport 80 accept
-        tcp dport 443 accept
+
+        ct state established,related accept
+        iifname "docker0" accept
+        oifname "docker0" accept
+        
         drop
     }
 
