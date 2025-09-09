@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -euo pipefail
-
 ###############################################################################
 # Update system and install basic tools
 ###############################################################################
@@ -20,13 +18,14 @@ sudo apt install -y \
     gnupg \
     lsb-release \
     iproute2 \
-    git
+    git \
+    nftables
 
 ###############################################################################
 # Install and configure ZSH
 ###############################################################################
 
-chsh -s "$(which zsh)" || true
+chsh -s "$(which zsh)"
 
 PROMPT_CONFIG="PROMPT='%n@%m:%~ %# '"
 if ! grep -Fxq "$PROMPT_CONFIG" ~/.zshrc; then
@@ -54,9 +53,10 @@ echo \
 sudo apt update
 sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-sudo systemctl enable --now docker
+sudo systemctl start docker
+sudo systemctl enable docker
 
-docker compose version || true
+docker compose version
 
 ###############################################################################
 # Install .NET SDK 8.0 and dotnet-script
@@ -124,17 +124,30 @@ if tmux info &>/dev/null; then
 fi
 
 ###############################################################################
-# Configure Firewall (nftables) — UFW removed/disabled
+# Configure Fail2Ban
 ###############################################################################
 
-# Останавливаем и отключаем UFW, если вдруг установлен
-sudo systemctl stop ufw 2>/dev/null || true
-sudo systemctl disable ufw 2>/dev/null || true
+sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+sudo systemctl enable fail2ban
+sudo systemctl start fail2ban
 
-# Устанавливаем nftables
-sudo apt install -y nftables
+###############################################################################
+# Configure Firewall (nftables; disable UFW if active)
+###############################################################################
 
-# Пишем конфиг nftables
+# Если UFW установлен и активен — отключаем
+if command -v ufw &>/dev/null; then
+  if sudo ufw status | grep -q "Status: active"; then
+    echo "⚠️  UFW активен — выключаю..."
+    sudo ufw --force disable
+  fi
+fi
+
+# Включаем nftables в автозагрузку и запускаем
+sudo systemctl enable nftables
+sudo systemctl start nftables
+
+# Базовая политика: входящие — только SSH; исходящие — всё
 sudo tee /etc/nftables.conf > /dev/null << 'EOF'
 #!/usr/sbin/nft -f
 
@@ -142,42 +155,38 @@ flush ruleset
 
 table inet filter {
     chain input {
-        type filter hook input priority filter;
-        policy drop;
+        type filter hook input priority 0;
 
-        # Разрешить трафик localhost
+        # Разрешаем loopback
         iif lo accept
 
-        # Разрешить уже установленные соединения
+        # Разрешаем уже установленные соединения
         ct state established,related accept
 
-        # Разрешить SSH
+        # Разрешаем SSH
         tcp dport 22 accept
+
+        # Остальное дропаем
+        drop
     }
 
     chain forward {
-        type filter hook forward priority filter;
-        policy drop;
+        type filter hook forward priority 0;
+        drop
     }
 
     chain output {
-        type filter hook output priority filter;
-        policy accept;
+        type filter hook output priority 0;
+
+        # Разрешаем всё исходящее (интернет доступен)
+        accept
     }
 }
 EOF
 
-# Включаем и применяем правила
-sudo systemctl enable nftables
+# Применяем правила
+sudo nft -f /etc/nftables.conf
 sudo systemctl restart nftables
-
-###############################################################################
-# Configure Fail2Ban
-###############################################################################
-
-sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
-sudo systemctl enable fail2ban
-sudo systemctl start fail2ban
 
 ###############################################################################
 # Create /usr/local/bin/statusbar.csx (CPU + MEM, right)
@@ -298,7 +307,7 @@ fi
 # Final cleanup and reboot
 ###############################################################################
 
-sudo rm -rf ./install.sh 2>/dev/null || true
+sudo rm -rf ./install.sh
 
 echo "✅ Setup completed successfully! System will now reboot..."
 sleep 3
