@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 ###############################################################################
 # Update system and install basic tools
 ###############################################################################
@@ -12,7 +14,6 @@ sudo apt install -y \
     vim \
     zip \
     htop \
-    ufw \
     fail2ban \
     ca-certificates \
     curl \
@@ -25,7 +26,7 @@ sudo apt install -y \
 # Install and configure ZSH
 ###############################################################################
 
-chsh -s "$(which zsh)"
+chsh -s "$(which zsh)" || true
 
 PROMPT_CONFIG="PROMPT='%n@%m:%~ %# '"
 if ! grep -Fxq "$PROMPT_CONFIG" ~/.zshrc; then
@@ -53,10 +54,9 @@ echo \
 sudo apt update
 sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-sudo systemctl start docker
-sudo systemctl enable docker
+sudo systemctl enable --now docker
 
-docker compose version
+docker compose version || true
 
 ###############################################################################
 # Install .NET SDK 8.0 and dotnet-script
@@ -124,13 +124,52 @@ if tmux info &>/dev/null; then
 fi
 
 ###############################################################################
-# Configure Firewall (UFW)
+# Configure Firewall (nftables) — UFW removed/disabled
 ###############################################################################
 
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
-sudo ufw allow OpenSSH
-sudo ufw --force enable
+# Останавливаем и отключаем UFW, если вдруг установлен
+sudo systemctl stop ufw 2>/dev/null || true
+sudo systemctl disable ufw 2>/dev/null || true
+
+# Устанавливаем nftables
+sudo apt install -y nftables
+
+# Пишем конфиг nftables
+sudo tee /etc/nftables.conf > /dev/null << 'EOF'
+#!/usr/sbin/nft -f
+
+flush ruleset
+
+table inet filter {
+    chain input {
+        type filter hook input priority filter;
+        policy drop;
+
+        # Разрешить трафик localhost
+        iif lo accept
+
+        # Разрешить уже установленные соединения
+        ct state established,related accept
+
+        # Разрешить SSH
+        tcp dport 22 accept
+    }
+
+    chain forward {
+        type filter hook forward priority filter;
+        policy drop;
+    }
+
+    chain output {
+        type filter hook output priority filter;
+        policy accept;
+    }
+}
+EOF
+
+# Включаем и применяем правила
+sudo systemctl enable nftables
+sudo systemctl restart nftables
 
 ###############################################################################
 # Configure Fail2Ban
@@ -259,7 +298,7 @@ fi
 # Final cleanup and reboot
 ###############################################################################
 
-sudo rm -rf ./install.sh
+sudo rm -rf ./install.sh 2>/dev/null || true
 
 echo "✅ Setup completed successfully! System will now reboot..."
 sleep 3
