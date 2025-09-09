@@ -296,25 +296,47 @@ fi
 # Configure Netplan (detect WAN iface via route to 8.8.8.8)
 ###############################################################################
 
-DEFAULT_IF="$(ip route get 8.8.8.8 2>/dev/null | awk '/ dev / {for (i=1;i<=NF;i++) if ($i=="dev") {print $(i+1); exit}}')"
-if [ -z "$DEFAULT_IF" ]; then
-  DEFAULT_IF="$(ip route show default 2>/dev/null | awk '/^default/ {print $5; exit}')"
-fi
+# Control via env:
+#   NETPLAN_APPLY=1   — run without asking (non-interactive)
+#   NETPLAN_APPLY=0   — skip without asking
+# if not set — ask user interactively
 
-if [ -z "$DEFAULT_IF" ] || [ ! -d "/sys/class/net/$DEFAULT_IF" ]; then
-  echo "❌ Не удалось определить интерфейс с интернетом. Пропускаю настройку Netplan."
-else
-  MAC_ADDR="$(cat "/sys/class/net/$DEFAULT_IF/address" | tr 'A-Z' 'a-z')"
-
-  echo "🌐 Обнаружен интерфейс с интернетом: $DEFAULT_IF (MAC: $MAC_ADDR)"
-
-  TS="$(date +%Y%m%d%H%M%S)"
-  sudo mkdir -p "/etc/netplan/backup-$TS"
-  if ls /etc/netplan/*.yaml >/dev/null 2>&1; then
-    sudo mv /etc/netplan/*.yaml "/etc/netplan/backup-$TS"/
+should_run_netplan() {
+  if [ "${NETPLAN_APPLY:-ask}" = "1" ]; then
+    return 0
+  elif [ "${NETPLAN_APPLY:-ask}" = "0" ]; then
+    return 1
   fi
 
-  sudo tee /etc/netplan/01-main.yaml > /dev/null <<EOF
+  echo
+  echo "⚠️  WARNING: Applying Netplan may temporarily disconnect your SSH session."
+  echo "    It will create a new /etc/netplan/01-main.yaml with DHCPv4 and DNS 8.8.8.8/1.1.1.1."
+  read -r -p "Do you want to configure Netplan now? [y/N]: " reply
+  case "$reply" in
+    [Yy]*) return 0 ;;
+    *)     return 1 ;;
+  esac
+}
+
+if should_run_netplan; then
+  DEFAULT_IF="$(ip route get 8.8.8.8 2>/dev/null | awk '/ dev / {for (i=1;i<=NF;i++) if ($i=="dev") {print $(i+1); exit}}')"
+  if [ -z "$DEFAULT_IF" ]; then
+    DEFAULT_IF="$(ip route show default 2>/dev/null | awk '/^default/ {print $5; exit}')"
+  fi
+
+  if [ -z "$DEFAULT_IF" ] || [ ! -d "/sys/class/net/$DEFAULT_IF" ]; then
+    echo "❌ Could not detect default internet interface. Skipping Netplan config."
+  else
+    MAC_ADDR="$(cat "/sys/class/net/$DEFAULT_IF/address" | tr 'A-Z' 'a-z')"
+    echo "🌐 Detected internet interface: $DEFAULT_IF (MAC: $MAC_ADDR)"
+
+    TS="$(date +%Y%m%d%H%M%S)"
+    sudo mkdir -p "/etc/netplan/backup-$TS"
+    if ls /etc/netplan/*.yaml >/dev/null 2>&1; then
+      sudo mv /etc/netplan/*.yaml "/etc/netplan/backup-$TS"/
+    fi
+
+    sudo tee /etc/netplan/01-main.yaml > /dev/null <<EOF
 network:
   version: 2
   ethernets:
@@ -329,8 +351,13 @@ network:
         addresses: [8.8.8.8, 1.1.1.1]
 EOF
 
-  sudo netplan generate
-  sudo netplan apply || true
+    sudo netplan generate
+    # Safer for remote servers:
+    # sudo netplan apply || sudo netplan try --timeout 10 || true
+    sudo netplan apply || true
+  fi
+else
+  echo "⏭️  Skipped Netplan configuration."
 fi
 
 ###############################################################################
