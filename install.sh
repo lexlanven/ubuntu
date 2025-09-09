@@ -149,32 +149,33 @@ sudo systemctl start nftables
 sudo tee /etc/nftables.conf > /dev/null << 'EOF'
 #!/usr/sbin/nft -f
 
-flush ruleset
+flush table inet filter
 
 table inet filter {
     chain input {
         type filter hook input priority 0;
+        policy drop;
 
         iif lo accept
         ct state established,related accept
-        tcp dport { 22, 80, 443 } accept 
 
-        drop
+        tcp dport 22 accept
+        ip protocol icmp icmp type echo-request accept
+        ip6 nexthdr icmpv6 icmpv6 type echo-request accept
     }
 
     chain forward {
         type filter hook forward priority 0;
+        policy drop;
 
         ct state established,related accept
         iifname "docker0" accept
         oifname "docker0" accept
-        
-        drop
     }
 
     chain output {
         type filter hook output priority 0;
-        accept
+        policy accept;
     }
 }
 EOF
