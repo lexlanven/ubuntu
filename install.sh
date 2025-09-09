@@ -164,6 +164,7 @@ table inet filter {
 
     chain forward {
         type filter hook forward priority 0;
+        tcp dport 80 accept
         tcp dport 443 accept
         drop
     }
