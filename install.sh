@@ -319,9 +319,6 @@ network:
   version: 2
   ethernets:
     ${DEFAULT_IF}:
-      match:
-        macaddress: "${MAC_ADDR}"
-      set-name: "${DEFAULT_IF}"
       dhcp4: true
       dhcp6: false
       accept-ra: false
