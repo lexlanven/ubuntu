@@ -157,12 +157,10 @@ table inet filter {
 
     iifname "lo" accept;
     ct state established,related accept;
-    ct status dnat accept;
 
     tcp dport 22 accept;
     
     ip  protocol icmp  icmp  type echo-request  accept;
-    ip6 nexthdr   icmpv6 icmpv6 type echo-request accept;
   }
 
   chain forward {
