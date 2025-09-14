@@ -166,10 +166,10 @@ table inet filter {
   chain forward {
     type filter hook forward priority 0; policy drop;
 
-    ct state established,related accept
+    ct state established,related accept;
     ct status dnat accept;
-    iifname "docker0" accept
-    oifname "docker0" accept
+    iifname "docker0" accept;
+    oifname "docker0" accept;
   }
 
   chain output {
